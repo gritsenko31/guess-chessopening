@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guess the Opening — ChessLessonsPro</title>
+<link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<style>
+:root {
+  --font-display: 'Cabinet Grotesk', 'Arial', sans-serif;
+  --font-body: 'Satoshi', 'Arial', sans-serif;
+  --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+  --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+  --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+  --text-2xl: clamp(2rem, 1.2rem + 2.5vw, 3.5rem);
+  --sp1:.25rem;--sp2:.5rem;--sp3:.75rem;--sp4:1rem;--sp5:1.25rem;
+  --sp6:1.5rem;--sp8:2rem;--sp10:2.5rem;--sp12:3rem;--sp16:4rem;
+  --r-sm:.375rem;--r-md:.5rem;--r-lg:.75rem;--r-xl:1rem;--r-full:9999px;
+  --ease:180ms cubic-bezier(.16,1,.3,1);
+}
+[data-theme="dark"],:root {
+  --bg:#0e0d0b; --surf:#141311; --surf2:#1a1917; --surf-off:#201f1c;
+  --surf-dyn:#2a2927; --div:#2e2d2a; --bdr:#383735;
+  --tx:#e2e0dc; --tx-m:#8a8884; --tx-f:#5a5856; --tx-inv:#1a1917;
+  --gold:#c9a84c; --gold-h:#e0bc60; --gold-hl:#3a3020;
+  --ok:#6daa45; --ok-h:#4d8f25; --ok-hl:#1e3010;
+  --err:#e05555; --err-h:#c23a3a; --err-hl:#3a1515;
+  --sh-sm:0 1px 2px oklch(0 0 0/.25);
+  --sh-md:0 4px 16px oklch(0 0 0/.4);
+  --sh-lg:0 12px 40px oklch(0 0 0/.55);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{-webkit-font-smoothing:antialiased;}
+body{
+  font-family:var(--font-body);
+  font-size:var(--text-base);
+  color:var(--tx);
+  background:var(--bg);
+  min-height:100vh;
+  line-height:1.6;
+}
+button{cursor:pointer;border:none;background:none;font:inherit;color:inherit;}
+a,button{transition:color var(--ease),background var(--ease),border-color var(--ease),transform var(--ease),box-shadow var(--ease);}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:var(--r-sm);}
+
+/* ── LAYOUT ── */
+.app{
+  width:100%;
+  max-width:780px;
+  margin:0 auto;
+  padding:var(--sp8) var(--sp4) var(--sp16);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:var(--sp6);
+}
+
+/* ── HEADER ── */
+.header{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding-bottom:var(--sp5);
+  border-bottom:1px solid var(--bdr);
+}
+.logo{display:flex;align-items:center;gap:var(--sp3);text-decoration:none;color:var(--tx);}
+.logo-text{font-family:var(--font-display);font-size:var(--text-base);font-weight:700;}
+.logo-text span{color:var(--gold);}
+.score-wrap{display:flex;align-items:center;gap:var(--sp2);font-size:var(--text-sm);color:var(--tx-m);}
+.score-num{font-family:var(--font-display);font-size:var(--text-lg);font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums;}
+
+/* ── PROGRESS ── */
+.progress-wrap{width:100%;display:flex;flex-direction:column;gap:var(--sp2);}
+.progress-meta{display:flex;justify-content:space-between;font-size:var(--text-xs);color:var(--tx-m);text-transform:uppercase;letter-spacing:.04em;}
+.progress-track{width:100%;height:4px;background:var(--surf-off);border-radius:var(--r-full);overflow:hidden;}
+.progress-bar{height:100%;background:var(--gold);border-radius:var(--r-full);transition:width .4s cubic-bezier(.16,1,.3,1);}
+
+/* ── STREAK ── */
+.streak{display:flex;gap:5px;justify-content:center;flex-wrap:wrap;}
+.sdot{width:10px;height:10px;border-radius:50%;background:var(--surf-off);border:1.5px solid var(--bdr);transition:background .3s,border-color .3s,transform .3s cubic-bezier(.34,1.56,.64,1);}
+.sdot.lit{background:var(--gold);border-color:var(--gold);transform:scale(1.25);}
+.sdot.ok{background:var(--ok);border-color:var(--ok);}
+.sdot.err{background:var(--err);border-color:var(--err);}
+
+/* ── BOARD ── */
+.board-section{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:var(--sp3);
+  width:100%;
+}
+.board-caption{font-size:var(--text-xs);color:var(--tx-m);text-transform:uppercase;letter-spacing:.05em;}
+
+/* The board wrapper controls the size */
+.board-wrap{
+  /* Responsive: fill available width up to 360px */
+  width: min(360px, 100%);
+  flex-shrink:0;
+}
+.chessboard{
+  width:100%;
+  /* Force exact square — no aspect-ratio tricks */
+  display:block;
+  border-radius:var(--r-lg);
+  overflow:hidden;
+  border:2px solid var(--bdr);
+  box-shadow:var(--sh-lg);
+  /* table layout for pixel-perfect 8x8 grid */
+  border-collapse:collapse;
+  table-layout:fixed;
+}
+.chessboard tr{display:flex;}
+.chessboard td{
+  flex:1;
+  /* height = width via padding trick */
+  position:relative;
+  padding-bottom:12.5%; /* 1/8 of 100% = 12.5% each row */
+}
+/* Square colors */
+.sq-l{background:#c8aa6e;}
+.sq-d{background:#8b6343;}
+.sq-l.hl,.sq-d.hl{background:rgba(201,168,76,.55);}
+.sq-l.hl2,.sq-d.hl2{background:rgba(201,168,76,.28);}
+
+/* Piece absolutely fills the square */
+.sq-inner{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  /* Use a font size relative to the square width */
+  font-size:5.5vw; /* will be clamped below */
+}
+.piece{
+  line-height:1;
+  user-select:none;
+  /* Drop shadow for contrast on both light/dark squares */
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.5));
+}
+/* Coordinate labels */
+.coord-rank{
+  position:absolute;
+  top:2px; left:3px;
+  font-size:9px;
+  font-weight:700;
+  opacity:.6;
+  line-height:1;
+  font-family:var(--font-body);
+}
+.coord-file{
+  position:absolute;
+  bottom:2px; right:3px;
+  font-size:9px;
+  font-weight:700;
+  opacity:.6;
+  line-height:1;
+  font-family:var(--font-body);
+}
+
+/* ── MOVES STRIP ── */
+.moves-strip{
+  display:flex;
+  flex-wrap:wrap;
+  gap:var(--sp2);
+  justify-content:center;
+  width:100%;
+  max-width:360px;
+  min-height:32px;
+}
+.mc{
+  background:var(--surf2);
+  border:1px solid var(--bdr);
+  border-radius:var(--r-sm);
+  padding:2px var(--sp3);
+  font-size:var(--text-xs);
+  font-family:'Courier New',monospace;
+  color:var(--tx-m);
+}
+.mc.cur{
+  background:var(--gold-hl);
+  border-color:var(--gold);
+  color:var(--gold);
+}
+
+/* ── QUESTION CARD ── */
+.qcard{
+  width:100%;
+  background:var(--surf);
+  border:1px solid var(--bdr);
+  border-radius:var(--r-xl);
+  padding:var(--sp6);
+  display:flex;
+  flex-direction:column;
+  gap:var(--sp5);
+  box-shadow:var(--sh-md);
+}
+.qtitle{
+  font-family:var(--font-display);
+  font-size:var(--text-xl);
+  font-weight:800;
+  letter-spacing:-.02em;
+  text-align:center;
+  line-height:1.15;
+}
+.qsub{
+  font-size:var(--text-xs);
+  color:var(--tx-m);
+  text-align:center;
+  margin-top:calc(-1*var(--sp4));
+  letter-spacing:.03em;
+}
+.eco-tag{
+  display:inline-block;
+  background:var(--surf-off);
+  border:1px solid var(--bdr);
+  border-radius:var(--r-sm);
+  padding:1px 6px;
+  font-size:10px;
+  font-family:'Courier New',monospace;
+  color:var(--gold);
+  margin-right:var(--sp2);
+  vertical-align:middle;
+}
+.fam-tag{
+  display:inline-block;
+  background:rgba(201,168,76,.12);
+  border:1px solid rgba(201,168,76,.25);
+  border-radius:var(--r-sm);
+  padding:1px 7px;
+  font-size:10px;
+  font-weight:600;
+  color:var(--gold);
+  margin-right:var(--sp2);
+  vertical-align:middle;
+}
+
+/* ── OPTIONS ── */
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp3);}
+.opt{
+  background:var(--surf2);
+  border:1.5px solid var(--bdr);
+  border-radius:var(--r-lg);
+  padding:var(--sp3) var(--sp4);
+  text-align:left;
+  font-size:var(--text-sm);
+  font-weight:500;
+  color:var(--tx);
+  display:flex;
+  align-items:center;
+  gap:var(--sp3);
+  line-height:1.3;
+}
+.opt:not(:disabled):hover{background:var(--surf-off);border-color:var(--gold);transform:translateY(-1px);}
+.opt:not(:disabled):active{transform:translateY(0);}
+.opt-letter{
+  flex-shrink:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+  border-radius:var(--r-md);background:var(--surf-off);border:1px solid var(--bdr);
+  font-size:var(--text-xs);font-weight:700;font-family:var(--font-display);color:var(--tx-m);
+  transition:background var(--ease),border-color var(--ease),color var(--ease);
+}
+.opt:not(:disabled):hover .opt-letter{background:var(--gold-hl);border-color:var(--gold);color:var(--gold);}
+.opt.correct{background:var(--ok-hl);border-color:var(--ok);}
+.opt.correct .opt-letter{background:var(--ok);border-color:var(--ok);color:#fff;}
+.opt.wrong{background:var(--err-hl);border-color:var(--err);opacity:.85;}
+.opt.wrong .opt-letter{background:var(--err);border-color:var(--err);color:#fff;}
+.opt.reveal{background:var(--ok-hl);border-color:var(--ok);opacity:.6;}
+.opt:disabled{cursor:default;}
+
+/* ── FEEDBACK ── */
+.feedback{
+  display:flex;align-items:flex-start;gap:var(--sp3);
+  padding:var(--sp4);border-radius:var(--r-lg);
+  font-size:var(--text-sm);line-height:1.5;
+  opacity:0;transform:translateY(6px);
+  transition:opacity .3s,transform .3s cubic-bezier(.16,1,.3,1);
+  pointer-events:none;
+}
+.feedback.vis{opacity:1;transform:translateY(0);pointer-events:auto;}
+.fb-ok{background:var(--ok-hl);color:var(--ok-h);border:1px solid color-mix(in oklch,var(--ok) 30%,transparent);}
+.fb-err{background:var(--err-hl);color:var(--err-h);border:1px solid color-mix(in oklch,var(--err) 30%,transparent);}
+.fb-icon{flex-shrink:0;margin-top:2px;}
+.fb-body strong{display:block;font-weight:700;margin-bottom:var(--sp1);}
+
+/* ── HINT ── */
+.hint-area{display:flex;flex-direction:column;gap:var(--sp3);}
+.hint-btn{
+  display:flex;align-items:center;gap:var(--sp2);align-self:center;
+  background:transparent;border:1px solid var(--bdr);
+  border-radius:var(--r-full);padding:var(--sp2) var(--sp4);
+  font-size:var(--text-xs);color:var(--tx-m);
+}
+.hint-btn:hover:not(:disabled){background:var(--surf2);border-color:var(--gold);color:var(--gold);}
+.hint-btn:disabled{opacity:.35;cursor:default;}
+.hint-box{
+  background:var(--surf-off);border:1px solid var(--bdr);
+  border-radius:var(--r-lg);padding:var(--sp3) var(--sp4);
+  font-size:var(--text-sm);color:var(--tx-m);display:none;
+}
+.hint-box.vis{display:block;}
+
+/* ── NEXT BTN ── */
+.next-btn{
+  display:flex;align-items:center;gap:var(--sp2);align-self:center;
+  background:var(--gold);color:var(--tx-inv);
+  font-family:var(--font-display);font-size:var(--text-sm);font-weight:700;
+  padding:var(--sp3) var(--sp8);border-radius:var(--r-full);
+  opacity:0;pointer-events:none;
+  transition:opacity .3s,background var(--ease),transform var(--ease);
+}
+.next-btn.vis{opacity:1;pointer-events:auto;}
+.next-btn:hover{background:var(--gold-h);transform:translateY(-1px);}
+
+/* ── START SCREEN ── */
+.start-screen{
+  width:100%;background:var(--surf);border:1px solid var(--bdr);
+  border-radius:var(--r-xl);padding:var(--sp10) var(--sp8);
+  display:flex;flex-direction:column;align-items:center;gap:var(--sp5);
+  text-align:center;box-shadow:var(--sh-md);
+}
+.start-screen.hidden{display:none;}
+.s-icon{font-size:3.5rem;line-height:1;}
+.s-title{font-family:var(--font-display);font-size:var(--text-xl);font-weight:800;letter-spacing:-.02em;}
+.s-desc{font-size:var(--text-base);color:var(--tx-m);max-width:42ch;}
+.mode-tabs{display:flex;background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--r-full);padding:3px;gap:2px;}
+.mtab{padding:var(--sp2) var(--sp4);border-radius:var(--r-full);font-size:var(--text-xs);font-weight:600;color:var(--tx-m);}
+.mtab.active{background:var(--gold);color:var(--tx-inv);}
+.mtab:hover:not(.active){color:var(--tx);}
+.diff-row{display:flex;gap:var(--sp3);flex-wrap:wrap;justify-content:center;}
+.dbtn{padding:var(--sp2) var(--sp4);border-radius:var(--r-full);border:1.5px solid var(--bdr);font-size:var(--text-sm);font-weight:600;color:var(--tx-m);background:var(--surf2);}
+.dbtn.active{background:var(--gold-hl);border-color:var(--gold);color:var(--gold);}
+.dbtn:hover:not(.active){border-color:var(--gold);color:var(--tx);}
+.pool-info{font-size:var(--text-xs);color:var(--tx-f);letter-spacing:.04em;}
+.start-btn{
+  display:flex;align-items:center;gap:var(--sp2);
+  background:var(--gold);color:var(--tx-inv);
+  font-family:var(--font-display);font-size:var(--text-base);font-weight:700;
+  padding:var(--sp3) var(--sp10);border-radius:var(--r-full);margin-top:var(--sp2);
+}
+.start-btn:hover{background:var(--gold-h);transform:translateY(-2px);box-shadow:var(--sh-md);}
+.legend{display:flex;gap:var(--sp4);flex-wrap:wrap;justify-content:center;}
+.leg-item{display:flex;align-items:center;gap:var(--sp2);font-size:var(--text-xs);color:var(--tx-m);}
+.leg-dot{width:8px;height:8px;border-radius:50%;}
+
+/* ── QUIZ WRAP ── */
+.quiz-wrap{display:none;width:100%;flex-direction:column;align-items:center;gap:var(--sp5);}
+.quiz-wrap.vis{display:flex;}
+.diff-badge{
+  display:inline-flex;align-items:center;gap:var(--sp1);
+  font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:.06em;
+  padding:var(--sp1) var(--sp3);border-radius:var(--r-full);
+  background:var(--surf-off);color:var(--tx-m);border:1px solid var(--bdr);
+  align-self:center;
+}
+
+/* ── RESULT ── */
+.result{
+  width:100%;background:var(--surf);border:1px solid var(--bdr);
+  border-radius:var(--r-xl);padding:var(--sp10) var(--sp8);
+  display:none;flex-direction:column;align-items:center;gap:var(--sp5);
+  text-align:center;box-shadow:var(--sh-md);
+}
+.result.vis{display:flex;}
+.r-trophy{font-size:4rem;line-height:1;}
+.r-title{font-family:var(--font-display);font-size:var(--text-xl);font-weight:800;letter-spacing:-.02em;}
+.r-score{font-family:var(--font-display);font-size:var(--text-2xl);font-weight:800;color:var(--gold);letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+.r-msg{font-size:var(--text-base);color:var(--tx-m);max-width:38ch;}
+.r-stats{display:flex;gap:var(--sp8);padding:var(--sp4) var(--sp8);background:var(--surf2);border-radius:var(--r-xl);border:1px solid var(--bdr);}
+.stat{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.stat-val{font-family:var(--font-display);font-size:var(--text-lg);font-weight:700;font-variant-numeric:tabular-nums;}
+.stat-lbl{font-size:var(--text-xs);color:var(--tx-m);text-transform:uppercase;letter-spacing:.04em;}
+.restart-btn{
+  display:flex;align-items:center;gap:var(--sp2);
+  background:var(--gold);color:var(--tx-inv);
+  font-family:var(--font-display);font-size:var(--text-sm);font-weight:700;
+  padding:var(--sp3) var(--sp10);border-radius:var(--r-full);
+}
+.restart-btn:hover{background:var(--gold-h);transform:translateY(-1px);}
+
+/* ── ANIMATIONS ── */
+@keyframes pop-in{0%{transform:scale(.9) translateY(8px);opacity:0}to{transform:none;opacity:1}}
+.pop-in{animation:pop-in .3s cubic-bezier(.16,1,.3,1) both;}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.shake{animation:shake .3s ease both;}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;}}
+
+/* ── RESPONSIVE ── */
+@media(max-width:560px){
+  .opts{grid-template-columns:1fr;}
+  .qcard{padding:var(--sp4);}
+  .r-stats{gap:var(--sp5);}
+  .start-screen{padding:var(--sp8) var(--sp4);}
+  .mode-tabs{border-radius:var(--r-xl);}
+  .board-wrap{width:min(300px,100%);}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- HEADER -->
+<header class="header">
+  <a href="https://chesslessonspro.com" target="_blank" rel="noopener noreferrer" class="logo">
+    <svg width="34" height="34" viewBox="0 0 36 36" fill="none" aria-label="ChessLessonsPro">
+      <rect width="36" height="36" rx="8" fill="#c9a84c" fill-opacity=".15"/>
+      <rect x="8" y="8" width="7" height="7" rx="1" fill="#c9a84c"/>
+      <rect x="21" y="8" width="7" height="7" rx="1" fill="#c9a84c" fill-opacity=".4"/>
+      <rect x="8" y="21" width="7" height="7" rx="1" fill="#c9a84c" fill-opacity=".4"/>
+      <rect x="21" y="21" width="7" height="7" rx="1" fill="#c9a84c"/>
+      <circle cx="18" cy="18" r="3" fill="#c9a84c"/>
+    </svg>
+    <span class="logo-text">Chess<span>Lessons</span>Pro</span>
+  </a>
+  <div class="score-wrap">
+    <span>Score</span>
+    <span class="score-num" id="scoreEl">0</span>
+  </div>
+</header>
+
+<!-- START -->
+<div class="start-screen" id="startScreen">
+  <div class="s-icon">♟️</div>
+  <h1 class="s-title">Guess the Opening</h1>
+  <p class="s-desc">See the board position and moves — identify the opening or variation. 10 questions per round.</p>
+  <div class="mode-tabs" id="modeTabs">
+    <button class="mtab active" data-mode="mixed" onclick="setMode(this)">Mixed</button>
+    <button class="mtab" data-mode="families" onclick="setMode(this)">Families</button>
+    <button class="mtab" data-mode="variants" onclick="setMode(this)">Variations</button>
+  </div>
+  <div class="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:#c9a84c"></div><span>Opening families (1–5 moves)</span></div>
+    <div class="leg-item"><div class="leg-dot" style="background:#6daa45"></div><span>Named variations (5–10 moves)</span></div>
+  </div>
+  <div class="diff-row">
+    <button class="dbtn active" data-diff="easy" onclick="setDiff(this)">Beginner</button>
+    <button class="dbtn" data-diff="medium" onclick="setDiff(this)">Intermediate</button>
+    <button class="dbtn" data-diff="hard" onclick="setDiff(this)">Expert</button>
+    <button class="dbtn" data-diff="all" onclick="setDiff(this)">All</button>
+  </div>
+  <p class="pool-info" id="poolInfo">Pool: loading…</p>
+  <button class="start-btn" onclick="startGame()">
+    Start Game <i data-lucide="arrow-right" width="18" height="18"></i>
+  </button>
+</div>
+
+<!-- QUIZ -->
+<div class="quiz-wrap" id="quizWrap">
+  <div class="progress-wrap">
+    <div class="progress-meta">
+      <span id="progLabel">Question 1 / 10</span>
+      <span id="progPct">0%</span>
+    </div>
+    <div class="progress-track"><div class="progress-bar" id="progBar" style="width:0%"></div></div>
+  </div>
+
+  <div class="streak" id="streak"></div>
+
+  <div class="board-section">
+    <div class="board-caption" id="boardCaption">Identify the opening!</div>
+    <div class="board-wrap">
+      <div class="chessboard" id="chessboard"></div>
+    </div>
+    <div class="moves-strip" id="movesStrip"></div>
+  </div>
+
+  <div class="qcard pop-in" id="qcard">
+    <div>
+      <div class="qtitle" id="qtitle">Which opening is this?</div>
+      <div class="qsub" id="qsub"></div>
+    </div>
+    <div class="opts" id="opts"></div>
+    <div class="feedback" id="feedback">
+      <div class="fb-icon" id="fbIcon"></div>
+      <div class="fb-body" id="fbBody"></div>
+    </div>
+    <div class="hint-area">
+      <button class="hint-btn" id="hintBtn" onclick="useHint()">
+        <i data-lucide="lightbulb" width="14" height="14"></i>
+        Hint (<span id="hintsLeft">3</span> left)
+      </button>
+      <div class="hint-box" id="hintBox"></div>
+    </div>
+    <button class="next-btn" id="nextBtn" onclick="nextQ()">
+      Next Question <i data-lucide="chevron-right" width="16" height="16"></i>
+    </button>
+  </div>
+  <div class="diff-badge" id="diffBadge"></div>
+</div>
+
+<!-- RESULT -->
+<div class="result" id="result">
+  <div class="r-trophy" id="rTrophy">🏆</div>
+  <h2 class="r-title" id="rTitle">Great game!</h2>
+  <div class="r-score" id="rScore">0 / 10</div>
+  <p class="r-msg" id="rMsg"></p>
+  <div class="r-stats">
+    <div class="stat"><div class="stat-val" id="stC">0</div><div class="stat-lbl">Correct</div></div>
+    <div class="stat"><div class="stat-val" id="stW">0</div><div class="stat-lbl">Wrong</div></div>
+    <div class="stat"><div class="stat-val" id="stH">0</div><div class="stat-lbl">Hints</div></div>
+  </div>
+  <button class="restart-btn" onclick="restart()">
+    <i data-lucide="refresh-cw" width="16" height="16"></i> Play Again
+  </button>
+</div>
+
+</div><!-- /app -->
+<script>
+// ── PIECE UNICODE ─────────────────────────────────────────────────
+const PIECES = {
+  wK:'♔', wQ:'♕', wR:'♖', wB:'♗', wN:'♘', wP:'♙',
+  bK:'♚', bQ:'♛', bR:'♜', bB:'♝', bN:'♞', bP:'♟'
+};
+
+// ── DATABASE ──────────────────────────────────────────────────────
+const DB = [
+// ── FAMILIES (beginner) ──
+{name:"Ruy Lopez",eco:"C60",type:"family",diff:"easy",pgn:"1.e4 e5 2.Nf3 Nc6 3.Bb5",hint:"Bishop b5 pressures the knight defending e5.",desc:"One of the oldest and most deeply analyzed openings. White targets e5 by pressuring its defender."},
+{name:"Italian Game",eco:"C50",type:"family",diff:"easy",pgn:"1.e4 e5 2.Nf3 Nc6 3.Bc4",hint:"The bishop eyes f7, Black's weakest pawn.",desc:"White develops to c4, targeting f7. Leads to rich tactical battles in the Giuoco Piano and Evans Gambit."},
+{name:"Sicilian Defense",eco:"B20",type:"family",diff:"easy",pgn:"1.e4 c5",hint:"Black fights for the center asymmetrically.",desc:"The most played response to 1.e4. Black avoids symmetry and fights for the initiative immediately."},
+{name:"French Defense",eco:"C00",type:"family",diff:"easy",pgn:"1.e4 e6 2.d4 d5",hint:"Solid center but the c8 bishop gets locked in.",desc:"Black builds a solid pawn chain. The light-squared bishop is the main strategic drawback."},
+{name:"Caro-Kann Defense",eco:"B10",type:"family",diff:"easy",pgn:"1.e4 c6 2.d4 d5",hint:"Similar to the French but the c8 bishop stays active.",desc:"Black supports d5 with c6, keeping the bishop free. Favored by Karpov and Petrosian."},
+{name:"Scandinavian Defense",eco:"B01",type:"family",diff:"easy",pgn:"1.e4 d5",hint:"Black attacks the center on the very first move.",desc:"The oldest recorded defense to 1.e4. Black immediately challenges the center."},
+{name:"Scotch Game",eco:"C44",type:"family",diff:"easy",pgn:"1.e4 e5 2.Nf3 Nc6 3.d4",hint:"White opens the center immediately on move three.",desc:"White challenges the center with d4 early. Revived by Kasparov in the 1990s."},
+{name:"Queen's Gambit",eco:"D06",type:"family",diff:"easy",pgn:"1.d4 d5 2.c4",hint:"White offers a pawn to gain central control.",desc:"White's primary alternative to 1.e4. The c4 offer is a positional gambit for central control."},
+{name:"London System",eco:"D02",type:"family",diff:"easy",pgn:"1.d4 d5 2.Nf3 Nf6 3.Bf4",hint:"White develops the bishop before it gets locked in.",desc:"Solid setup with Nf3 and Bf4. Very popular at all levels today."},
+{name:"Scotch Gambit",eco:"C44",type:"family",diff:"easy",pgn:"1.e4 e5 2.Nf3 Nc6 3.d4 exd4 4.Bc4",hint:"White sacrifices a pawn for rapid development instead of recapturing.",desc:"Rather than recapturing on d4, White develops Bc4, aiming for rapid development and attack."},
+// ── FAMILIES (intermediate) ──
+{name:"Queen's Indian Defense",eco:"E12",type:"family",diff:"medium",pgn:"1.d4 Nf6 2.c4 e6 3.Nf3 b6",hint:"Black fianchettoes the queenside bishop to control the long diagonal.",desc:"Black fianchettoes Bb7, contesting the a8-e4 diagonal. One of the most solid defenses to 1.d4."},
+{name:"Nimzo-Indian Defense",eco:"E20",type:"family",diff:"medium",pgn:"1.d4 Nf6 2.c4 e6 3.Nc3 Bb4",hint:"Black pins the c3 knight immediately.",desc:"Black pins the knight to prevent White fully occupying the center. Played by virtually every world champion."},
+{name:"King's Indian Defense",eco:"E60",type:"family",diff:"medium",pgn:"1.d4 Nf6 2.c4 g6 3.Nc3 Bg7 4.e4 d6",hint:"Black allows a huge White center, then counterattacks.",desc:"A dynamic fighting defense favored by Fischer and Kasparov. Black allows the center then strikes it."},
+{name:"Grünfeld Defense",eco:"D80",type:"family",diff:"medium",pgn:"1.d4 Nf6 2.c4 g6 3.Nc3 d5",hint:"Black hands over the center then attacks it with the g7 bishop.",desc:"A hypermodern classic. Black deliberately allows the center then bombards it with the bishop and ...c5."},
+{name:"Slav Defense",eco:"D10",type:"family",diff:"medium",pgn:"1.d4 d5 2.c4 c6",hint:"Black supports d5 with c6, keeping the c8 bishop free.",desc:"A solid reply to the Queen's Gambit, avoiding the French bishop problem."},
+{name:"English Opening",eco:"A10",type:"family",diff:"medium",pgn:"1.c4",hint:"White fights for d5 from the flank on move one.",desc:"White claims queenside space immediately. One of the most flexible first moves, transposing into many systems."},
+{name:"Reti Opening",eco:"A04",type:"family",diff:"medium",pgn:"1.Nf3 d5 2.c4",hint:"White attacks d5 with a flank pawn rather than occupying the center first.",desc:"A hypermodern approach. White develops the knight and attacks d5 from the flank."},
+{name:"Catalan Opening",eco:"E00",type:"family",diff:"medium",pgn:"1.d4 Nf6 2.c4 e6 3.g3",hint:"White combines the Queen's Gambit with a kingside fianchetto.",desc:"White combines queenside pawns with a g2 fianchetto, creating lasting diagonal pressure."},
+{name:"Dutch Defense",eco:"A80",type:"family",diff:"medium",pgn:"1.d4 f5",hint:"Black fights for e4 from the very first move.",desc:"Black grabs kingside space immediately. Unbalanced positions with attacking chances for both sides."},
+{name:"Alekhine's Defense",eco:"B02",type:"family",diff:"medium",pgn:"1.e4 Nf6",hint:"Black invites White to build a big center, then attacks it.",desc:"Black provokes White to advance pawns then attacks the overextended center. A hypermodern classic."},
+// ── FAMILIES (expert) ──
+{name:"King's Gambit",eco:"C30",type:"family",diff:"hard",pgn:"1.e4 e5 2.f4",hint:"White sacrifices the f-pawn to destroy Black's center.",desc:"One of the oldest romantic gambits. White sacrifices f4 for rapid development and kingside attack."},
+{name:"Vienna Game",eco:"C25",type:"family",diff:"hard",pgn:"1.e4 e5 2.Nc3",hint:"White develops the queenside knight first, keeping f2-f4 available.",desc:"White plays Nc3 before Nf3, keeping the f-pawn free. Can lead to sharp gambit play."},
+{name:"Petrov's Defense",eco:"C42",type:"family",diff:"hard",pgn:"1.e4 e5 2.Nf3 Nf6",hint:"Black mirrors White's knight move for solid equality.",desc:"Extremely solid and drawish. A weapon used by top players to neutralize 1.e4."},
+{name:"Bird's Opening",eco:"A02",type:"family",diff:"hard",pgn:"1.f4",hint:"White mirrors the Dutch Defense on the first move.",desc:"White plays 1.f4, controlling e5. Can be countered aggressively with the From's Gambit."},
+{name:"Nimzowitsch-Larsen Attack",eco:"A01",type:"family",diff:"hard",pgn:"1.b3",hint:"White fianchettoes the queenside bishop on move one.",desc:"White prepares Bb2, exerting long-diagonal pressure. Popularized by Larsen and Nimzowitsch."},
+{name:"Pirc Defense",eco:"B07",type:"family",diff:"hard",pgn:"1.e4 d6 2.d4 Nf6 3.Nc3 g6",hint:"Black allows a big White center then undermines it with the g7 bishop.",desc:"A hypermodern defense. Black fianchettoes to g7 and targets the White center from afar."},
+{name:"Modern Defense",eco:"B06",type:"family",diff:"hard",pgn:"1.e4 g6 2.d4 Bg7",hint:"Black fianchettoes immediately without committing the d-pawn.",desc:"Even more flexible than the Pirc. Black delays ...Nf6 to keep all options open."},
+
+// ── VARIATIONS ──
+{name:"Sicilian — Najdorf",eco:"B90",type:"variant",family:"Sicilian Defense",diff:"medium",pgn:"1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6",hint:"...a6 prevents Nb5 and prepares ...e5 or ...b5.",desc:"The most famous variation, played by Fischer and Kasparov. 5...a6 restrains White and prepares ...e5."},
+{name:"Sicilian — Dragon",eco:"B70",type:"variant",family:"Sicilian Defense",diff:"medium",pgn:"1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 g6",hint:"Black fianchettoes the bishop, forming the shape of a dragon.",desc:"Black builds the powerful Dragon bishop on g7. Leads to razor-sharp positions in the Yugoslav Attack."},
+{name:"Sicilian — Scheveningen",eco:"B80",type:"variant",family:"Sicilian Defense",diff:"medium",pgn:"1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 e6",hint:"...e6 instead of ...g6 — a small flexible center.",desc:"A solid Sicilian with a small center. Black keeps maximum flexibility and fights on both wings."},
+{name:"Sicilian — Classical",eco:"B58",type:"variant",family:"Sicilian Defense",diff:"medium",pgn:"1.e4 c5 2.Nf3 Nc6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 d6",hint:"Black develops naturally with ...Nc6 and ...d6.",desc:"The classical Sicilian with ...Nc6 and ...d6. Solid and direct, leading to rich middlegames."},
+{name:"Sicilian — Kan",eco:"B41",type:"variant",family:"Sicilian Defense",diff:"medium",pgn:"1.e4 c5 2.Nf3 e6 3.d4 cxd4 4.Nxd4 a6",hint:"...a6 prepares ...b5 and keeps the center flexible.",desc:"Black plays ...a6 early, preparing queenside expansion with maximum flexibility."},
+{name:"Sicilian — Accelerated Dragon",eco:"B34",type:"variant",family:"Sicilian Defense",diff:"hard",pgn:"1.e4 c5 2.Nf3 Nc6 3.d4 cxd4 4.Nxd4 g6",hint:"Black fianchettoes without playing ...d6 first, keeping ...d5 possible.",desc:"Black reaches Dragon structure without ...d6, avoiding the Yugoslav Attack."},
+{name:"Sicilian — Alapin (2.c3)",eco:"B22",type:"variant",family:"Sicilian Defense",diff:"medium",pgn:"1.e4 c5 2.c3",hint:"White plays c3 to support d4 without sacrificing a pawn.",desc:"White avoids mainstream Sicilian theory with 2.c3, preparing a supported d4 push."},
+{name:"Sicilian — Grand Prix Attack",eco:"B23",type:"variant",family:"Sicilian Defense",diff:"hard",pgn:"1.e4 c5 2.Nc3 Nc6 3.f4",hint:"White plays f4 early for an aggressive kingside attack.",desc:"White plays f4 before opening the center, aiming for a direct kingside attack. Popular at club level."},
+{name:"Ruy Lopez — Berlin Defense",eco:"C65",type:"variant",family:"Ruy Lopez",diff:"hard",pgn:"1.e4 e5 2.Nf3 Nc6 3.Bb5 Nf6",hint:"Black develops the knight rather than ...a6 — leads to the Berlin Endgame.",desc:"The 'Berlin Wall' — extremely solid. Kramnik used it to defeat Kasparov in the 2000 World Championship."},
+{name:"Ruy Lopez — Marshall Attack",eco:"C89",type:"variant",family:"Ruy Lopez",diff:"hard",pgn:"1.e4 e5 2.Nf3 Nc6 3.Bb5 a6 4.Ba4 Nf6 5.O-O Be7 6.Re1 b5 7.Bb3 O-O 8.c3 d5",hint:"Black sacrifices the d-pawn for a powerful piece attack.",desc:"Black gambits the d-pawn for massive piece activity. One of the most deeply analyzed gambit lines ever."},
+{name:"Ruy Lopez — Morphy Defense",eco:"C78",type:"variant",family:"Ruy Lopez",diff:"medium",pgn:"1.e4 e5 2.Nf3 Nc6 3.Bb5 a6 4.Ba4",hint:"...a6 forces the bishop to retreat — the main line of the Spanish.",desc:"The main Ruy Lopez line. Black plays ...a6 to gain queenside space while White retreats to a4."},
+{name:"Ruy Lopez — Exchange Variation",eco:"C68",type:"variant",family:"Ruy Lopez",diff:"medium",pgn:"1.e4 e5 2.Nf3 Nc6 3.Bb5 a6 4.Bxc6",hint:"White captures the knight, giving Black doubled pawns but the bishop pair.",desc:"White trades bishop for knight immediately. Black gets doubled pawns but the bishop pair and free development."},
+{name:"Giuoco Piano",eco:"C54",type:"variant",family:"Italian Game",diff:"medium",pgn:"1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5 4.c3 Nf6 5.d4",hint:"White builds a strong center with c3 and d4.",desc:"'Quiet Game' in Italian — but far from quiet. White's c3+d4 center creates rich tactical play."},
+{name:"Giuoco Pianissimo",eco:"C53",type:"variant",family:"Italian Game",diff:"medium",pgn:"1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5 4.d3",hint:"White plays d3 for a slow maneuvering game instead of d4.",desc:"The 'Very Quiet Game'. White plays d3 for slow maneuvering. Enormously popular at the top level recently."},
+{name:"Evans Gambit",eco:"C51",type:"variant",family:"Italian Game",diff:"hard",pgn:"1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5 4.b4",hint:"White sacrifices the b-pawn for a tempo and rapid development.",desc:"A romantic 19th-century gambit. White gives up the b-pawn for rapid development. Revived by Kasparov in 1995."},
+{name:"Two Knights Defense",eco:"C55",type:"variant",family:"Italian Game",diff:"medium",pgn:"1.e4 e5 2.Nf3 Nc6 3.Bc4 Nf6",hint:"Black counterattacks with ...Nf6 rather than copying White's bishop.",desc:"Black develops aggressively with ...Nf6, inviting the sharp 4.Ng5 attack."},
+{name:"QGD — Orthodox Defense",eco:"D60",type:"variant",family:"Queen's Gambit",diff:"medium",pgn:"1.d4 d5 2.c4 e6 3.Nc3 Nf6 4.Bg5 Be7 5.e3 O-O 6.Nf3 Nbd7",hint:"Black completes development classically without taking the c4 pawn.",desc:"The classical main line of QGD. Black develops solidly. A cornerstone of classical opening theory."},
+{name:"QGD — Tartakower Variation",eco:"D58",type:"variant",family:"Queen's Gambit",diff:"hard",pgn:"1.d4 d5 2.c4 e6 3.Nc3 Nf6 4.Bg5 Be7 5.e3 h6 6.Bh4 O-O 7.Rc1 b6",hint:"...b6 and ...Bb7 give Black active piece play.",desc:"Black fianchettoes the queenside bishop with ...b6 and ...Bb7 for counterplay. One of the best QGD lines."},
+{name:"Queen's Gambit Accepted",eco:"D20",type:"variant",family:"Queen's Gambit",diff:"medium",pgn:"1.d4 d5 2.c4 dxc4",hint:"Black takes the pawn, ceding the center for free development.",desc:"Black accepts the gambit and must work to equalize. White aims to recover the pawn with a good position."},
+{name:"Slav — Meran Variation",eco:"D47",type:"variant",family:"Slav Defense",diff:"hard",pgn:"1.d4 d5 2.c4 c6 3.Nf3 Nf6 4.Nc3 e6 5.e3 Nbd7 6.Bd3 dxc4 7.Bxc4 b5",hint:"...b5 starts aggressive queenside counterplay.",desc:"One of the most theoretically rich Slav lines. Black plays ...b5 for counterplay, leading to extreme sharpness."},
+{name:"KID — Classical Variation",eco:"E91",type:"variant",family:"King's Indian Defense",diff:"medium",pgn:"1.d4 Nf6 2.c4 g6 3.Nc3 Bg7 4.e4 d6 5.Nf3 O-O",hint:"Black castles quickly before launching ...e5.",desc:"The main KID setup. Black castles and prepares the ...e5 thrust to challenge White's center."},
+{name:"KID — Sämisch Variation",eco:"E81",type:"variant",family:"King's Indian Defense",diff:"hard",pgn:"1.d4 Nf6 2.c4 g6 3.Nc3 Bg7 4.e4 d6 5.f3",hint:"White plays f3 to reinforce the center — very aggressive.",desc:"White plays f3, reinforcing e4 and preparing a queenside attack with g4-h4. One of the most dangerous KID lines."},
+{name:"KID — Four Pawns Attack",eco:"E76",type:"variant",family:"King's Indian Defense",diff:"hard",pgn:"1.d4 Nf6 2.c4 g6 3.Nc3 Bg7 4.e4 d6 5.f4",hint:"White builds an enormous four-pawn center.",desc:"White builds a huge center with e4+f4. Very aggressive but Black gets counterplay with ...c5 or ...e5."},
+{name:"Nimzo-Indian — Classical (4.Qc2)",eco:"E32",type:"variant",family:"Nimzo-Indian Defense",diff:"medium",pgn:"1.d4 Nf6 2.c4 e6 3.Nc3 Bb4 4.Qc2",hint:"White plays Qc2 to prevent doubled pawns after ...Bxc3+.",desc:"The most popular Nimzo-Indian line. White avoids doubled pawns with Qc2."},
+{name:"Nimzo-Indian — Rubinstein (4.e3)",eco:"E40",type:"variant",family:"Nimzo-Indian Defense",diff:"hard",pgn:"1.d4 Nf6 2.c4 e6 3.Nc3 Bb4 4.e3",hint:"White plays e3 for solid development, accepting possible doubled pawns.",desc:"White plays 4.e3 for solid development. Black can create White's doubled pawns with ...Bxc3+."},
+{name:"French — Winawer Variation",eco:"C15",type:"variant",family:"French Defense",diff:"hard",pgn:"1.e4 e6 2.d4 d5 3.Nc3 Bb4",hint:"Black pins the c3 knight immediately, creating imbalances.",desc:"Black pins the c3 knight. Leads to extremely complex positions with opposite-side castling."},
+{name:"French — Tarrasch Variation",eco:"C05",type:"variant",family:"French Defense",diff:"medium",pgn:"1.e4 e6 2.d4 d5 3.Nd2",hint:"White plays Nd2 to avoid the ...Bb4 pin.",desc:"White plays Nd2 to sidestep ...Bb4 pins. Slightly passive but solid."},
+{name:"French — Advance Variation",eco:"C02",type:"variant",family:"French Defense",diff:"medium",pgn:"1.e4 e6 2.d4 d5 3.e5",hint:"White closes the center with e5 to gain space.",desc:"White advances e5 to gain space and aim for a kingside attack. Black counters with ...c5."},
+{name:"Caro-Kann — Classical",eco:"B18",type:"variant",family:"Caro-Kann Defense",diff:"medium",pgn:"1.e4 c6 2.d4 d5 3.Nc3 dxe4 4.Nxe4 Bf5",hint:"Black develops the bishop to f5 — the key difference from the French.",desc:"The main Caro-Kann line. Black develops the bishop actively to f5, solving the French's main problem."},
+{name:"Caro-Kann — Advance Variation",eco:"B12",type:"variant",family:"Caro-Kann Defense",diff:"medium",pgn:"1.e4 c6 2.d4 d5 3.e5",hint:"White closes the center like in the French Advance.",desc:"White advances e5 immediately. Black fights back with ...Bf5 and ...e6 in a solid structure."},
+{name:"Caro-Kann — Panov Attack",eco:"B13",type:"variant",family:"Caro-Kann Defense",diff:"hard",pgn:"1.e4 c6 2.d4 d5 3.exd5 cxd5 4.c4",hint:"White creates an isolated queen's pawn structure.",desc:"White plays c4 after the exchange, creating an IQP structure with dynamic piece activity."},
+{name:"Grünfeld — Exchange Variation",eco:"D85",type:"variant",family:"Grünfeld Defense",diff:"hard",pgn:"1.d4 Nf6 2.c4 g6 3.Nc3 d5 4.cxd5 Nxd5 5.e4 Nxc3 6.bxc3 Bg7",hint:"White builds a massive center, Black attacks it immediately.",desc:"White builds a huge center with c3+d4+e4, Black attacks it with the Dragon bishop and ...c5."},
+{name:"Budapest Gambit",eco:"A51",type:"variant",family:"Queen's Pawn",diff:"hard",pgn:"1.d4 Nf6 2.c4 e5",hint:"Black sacrifices a pawn on move two for rapid piece activity.",desc:"Black immediately gambles a pawn for active counterplay. A surprise weapon with rich tactical history."},
+{name:"Benko Gambit",eco:"A57",type:"variant",family:"Queen's Pawn",diff:"hard",pgn:"1.d4 Nf6 2.c4 c5 3.d5 b5",hint:"Black sacrifices the b-pawn to open the a and b files.",desc:"Black sacrifices a pawn for long-term queenside pressure. Famous for lasting compensation."},
+{name:"Benoni Defense",eco:"A65",type:"variant",family:"Queen's Pawn",diff:"hard",pgn:"1.d4 Nf6 2.c4 c5 3.d5 e6 4.Nc3 exd5 5.cxd5 d6",hint:"Black accepts a pawn weakness on d6 for kingside counterplay.",desc:"Black accepts structural weaknesses for dynamic piece activity and a kingside attack."},
+{name:"Trompowsky Attack",eco:"A45",type:"variant",family:"Queen's Pawn",diff:"hard",pgn:"1.d4 Nf6 2.Bg5",hint:"White immediately pins the f6 knight, avoiding Indian theory.",desc:"White pins the knight on move two, sidestepping King's Indian and Nimzo-Indian theory."},
+{name:"Four Knights Game",eco:"C46",type:"variant",family:"Open Games",diff:"medium",pgn:"1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6",hint:"All four knights are developed in the first three moves.",desc:"Both sides develop their knights symmetrically. Balanced but full of tactical possibilities."},
+];
+
+// Extra names for wrong options
+const EXTRA = ["London System","Colle System","Stonewall Attack","Philidor Defense",
+"Center Game","Latvian Gambit","Albin Counter-Gambit","Chigorin Defense","Owen Defense",
+"St. George Defense","Ponziani Opening","Bishop's Opening","Leningrad Dutch","Stonewall Dutch",
+"Polish Opening","Bogo-Indian Defense","Torre Attack","KID — Averbakh","Semi-Slav Defense",
+"Reversed Sicilian","Hippo Defense","Sicilian — Sozin","QGD — Cambridge Springs",
+"French — Classical","Ruy Lopez — Chigorin","KID — Petrosian System"];
+const ALL_NAMES = [...new Set([...DB.map(o=>o.name),...EXTRA])];
+
+// ── CHESS ENGINE via chess.js ────────────────────────────────────
+function getPosition(pgn) {
+  try {
+    const ch = new Chess();
+    ch.load_pgn(pgn);
+    return ch.fen();
+  } catch(e) {
+    console.warn("PGN parse error:", pgn, e);
+    return new Chess().fen(); // starting position fallback
+  }
+}
+
+function fenToGrid(fen) {
+  const board = [];
+  const rows = fen.split(' ')[0].split('/');
+  for (const row of rows) {
+    const r = [];
+    for (const ch of row) {
+      if (isNaN(ch)) {
+        r.push(ch); // piece
+      } else {
+        for (let i = 0; i < parseInt(ch); i++) r.push(null);
+      }
+    }
+    board.push(r);
+  }
+  return board; // board[0] = rank 8, board[7] = rank 1
+}
+
+function getLastMove(pgn) {
+  try {
+    const ch = new Chess();
+    ch.load_pgn(pgn);
+    const hist = ch.history({verbose:true});
+    if (!hist.length) return null;
+    const last = hist[hist.length-1];
+    return { from: last.from, to: last.to };
+  } catch(e) { return null; }
+}
+
+function squareToRC(sq) {
+  const files = 'abcdefgh';
+  const c = files.indexOf(sq[0]);
+  const r = 8 - parseInt(sq[1]);
+  return [r, c];
+}
+
+// ── BOARD RENDERER ────────────────────────────────────────────────
+const FILES_LABEL = ['a','b','c','d','e','f','g','h'];
+const RANKS_LABEL = ['8','7','6','5','4','3','2','1'];
+
+function renderBoard(pgn) {
+  const fen = getPosition(pgn);
+  const grid = fenToGrid(fen);
+  const lastMove = getLastMove(pgn);
+  let hlFrom = null, hlTo = null;
+  if (lastMove) {
+    hlFrom = squareToRC(lastMove.from);
+    hlTo   = squareToRC(lastMove.to);
+  }
+
+  const board = document.getElementById('chessboard');
+  board.innerHTML = '';
+  board.style.display = 'grid';
+  board.style.gridTemplateColumns = 'repeat(8, 1fr)';
+  board.style.gridTemplateRows = 'repeat(8, 1fr)';
+  // Force the board to be a perfect square by setting height = offsetWidth after paint
+  // Use a padding trick via a wrapper instead:
+  board.style.aspectRatio = '1';
+
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const cell = document.createElement('div');
+      const isLight = (r + c) % 2 === 0;
+      let cls = 'sq-' + (isLight ? 'l' : 'd');
+
+      // highlight
+      if (hlTo && hlTo[0] === r && hlTo[1] === c) cls += ' hl';
+      else if (hlFrom && hlFrom[0] === r && hlFrom[1] === c) cls += ' hl2';
+
+      cell.className = cls;
+      cell.style.cssText = 'position:relative;display:flex;align-items:center;justify-content:center;';
+
+      const piece = grid[r][c];
+      if (piece) {
+        const color = piece === piece.toUpperCase() ? 'w' : 'b';
+        const key = color + piece.toUpperCase();
+        const span = document.createElement('span');
+        span.className = 'piece';
+        span.textContent = PIECES[key] || '';
+        // Font size: responsive, based on board container
+        span.style.cssText = 'font-size:min(6.5vw,40px);line-height:1;user-select:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.6));display:block;';
+        cell.appendChild(span);
+      }
+
+      // Coordinates
+      if (c === 0) {
+        const cr = document.createElement('span');
+        cr.className = 'coord-rank';
+        cr.textContent = RANKS_LABEL[r];
+        cell.appendChild(cr);
+      }
+      if (r === 7) {
+        const cf = document.createElement('span');
+        cf.className = 'coord-file';
+        cf.textContent = FILES_LABEL[c];
+        cell.appendChild(cf);
+      }
+
+      board.appendChild(cell);
+    }
+  }
+}
+
+function renderMoves(pgn) {
+  const strip = document.getElementById('movesStrip');
+  strip.innerHTML = '';
+  try {
+    const ch = new Chess();
+    ch.load_pgn(pgn);
+    const hist = ch.history();
+    const total = hist.length;
+    hist.forEach((mv, i) => {
+      if (i % 2 === 0) {
+        const num = document.createElement('span');
+        num.className = 'mc';
+        num.textContent = (i/2+1) + '.';
+        strip.appendChild(num);
+      }
+      const chip = document.createElement('span');
+      chip.className = 'mc' + (i === total - 1 ? ' cur' : '');
+      chip.textContent = mv;
+      strip.appendChild(chip);
+    });
+  } catch(e) {}
+}
+
+// ── GAME STATE ────────────────────────────────────────────────────
+let G = {
+  questions:[], cur:0, score:0, correct:0, wrong:0,
+  hintsUsed:0, hintsLeft:3, answered:false,
+  diff:'easy', mode:'mixed', dots:[]
+};
+
+function setMode(btn) {
+  document.querySelectorAll('.mtab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  G.mode = btn.dataset.mode;
+  updatePool();
+}
+function setDiff(btn) {
+  document.querySelectorAll('.dbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  G.diff = btn.dataset.diff;
+  updatePool();
+}
+function getPool() {
+  let p = DB;
+  if (G.mode === 'families') p = p.filter(o=>o.type==='family');
+  else if (G.mode === 'variants') p = p.filter(o=>o.type==='variant');
+  if (G.diff === 'easy') p = p.filter(o=>o.diff==='easy');
+  else if (G.diff === 'medium') p = p.filter(o=>['easy','medium'].includes(o.diff));
+  else if (G.diff === 'hard') p = p.filter(o=>['medium','hard'].includes(o.diff));
+  return p;
+}
+function updatePool() {
+  const p = getPool();
+  const f = p.filter(o=>o.type==='family').length;
+  const v = p.filter(o=>o.type==='variant').length;
+  document.getElementById('poolInfo').textContent = `Pool: ${p.length} openings (${f} families · ${v} variations)`;
+}
+function shuffle(a) { return [...a].sort(()=>Math.random()-.5); }
+function buildOptions(correct) {
+  const wrong = shuffle([...new Set(ALL_NAMES)].filter(n=>n!==correct)).slice(0,3);
+  return shuffle([correct, ...wrong]);
+}
+
+function startGame() {
+  const pool = getPool();
+  if (pool.length < 4) { alert('Not enough openings in pool. Try a different filter.'); return; }
+  G.questions = shuffle(pool).slice(0,10);
+  G.cur=0; G.score=0; G.correct=0; G.wrong=0; G.hintsUsed=0; G.hintsLeft=3; G.answered=false; G.dots=[];
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('quizWrap').classList.add('vis');
+  document.getElementById('result').classList.remove('vis');
+  const dl = {easy:'Beginner',medium:'Intermediate',hard:'Expert',all:'All'};
+  const ml = {mixed:'Mixed',families:'Families',variants:'Variations'};
+  document.getElementById('diffBadge').textContent = (dl[G.diff]||'') + ' · ' + (ml[G.mode]||'');
+  buildStreak();
+  loadQ();
+}
+
+function buildStreak() {
+  const bar = document.getElementById('streak');
+  bar.innerHTML = '';
+  G.dots = [];
+  for (let i = 0; i < G.questions.length; i++) {
+    const d = document.createElement('div');
+    d.className = 'sdot';
+    bar.appendChild(d);
+    G.dots.push(d);
+  }
+}
+
+function loadQ() {
+  const q = G.questions[G.cur];
+  G.answered = false; G.hintsLeft = 3;
+  document.getElementById('hintsLeft').textContent = 3;
+  document.getElementById('hintBtn').disabled = false;
+  const hb = document.getElementById('hintBox'); hb.classList.remove('vis'); hb.textContent = '';
+  document.getElementById('nextBtn').classList.remove('vis');
+  const fb = document.getElementById('feedback'); fb.classList.remove('vis','fb-ok','fb-err');
+
+  const pct = Math.round(G.cur / G.questions.length * 100);
+  document.getElementById('progLabel').textContent = `Question ${G.cur+1} / ${G.questions.length}`;
+  document.getElementById('progPct').textContent = pct + '%';
+  document.getElementById('progBar').style.width = pct + '%';
+
+  // Board
+  renderBoard(q.pgn);
+  renderMoves(q.pgn);
+
+  // Count moves
+  const ch = new Chess();
+  try { ch.load_pgn(q.pgn); } catch(e){}
+  const moveCount = ch.history().length;
+  document.getElementById('boardCaption').textContent =
+    `Move ${moveCount} · ${q.type==='variant' ? 'Name the variation!' : 'Name the opening!'}`;
+
+  // Subtitle
+  const typeLabel = q.type==='variant' ? `Variation of: <em>${q.family||'?'}</em>` : 'Opening family';
+  document.getElementById('qsub').innerHTML = `<span class="eco-tag">${q.eco}</span>${typeLabel}`;
+  document.getElementById('qtitle').textContent = q.type==='variant' ? 'Which variation is this?' : 'Which opening is this?';
+
+  // Options
+  const options = buildOptions(q.name);
+  const grid = document.getElementById('opts');
+  grid.innerHTML = '';
+  ['A','B','C','D'].forEach((letter, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'opt';
+    btn.innerHTML = `<span class="opt-letter">${letter}</span>${options[i]}`;
+    btn.addEventListener('click', () => answer(btn, options[i], q.name, grid));
+    grid.appendChild(btn);
+  });
+
+  // Animate card
+  const card = document.getElementById('qcard');
+  card.classList.remove('pop-in');
+  void card.offsetWidth;
+  card.classList.add('pop-in');
+
+  document.getElementById('scoreEl').textContent = G.score;
+}
+
+function answer(btn, chosen, correct, grid) {
+  if (G.answered) return;
+  G.answered = true;
+  const q = G.questions[G.cur];
+  const ok = chosen === correct;
+
+  grid.querySelectorAll('.opt').forEach(b => {
+    b.disabled = true;
+    if (b.innerHTML.includes(correct)) b.classList.add(ok ? 'correct' : 'reveal');
+  });
+  if (!ok) { btn.classList.add('wrong'); btn.classList.add('shake'); }
+  else btn.classList.add('correct');
+
+  const dot = G.dots[G.cur];
+  if (dot) { dot.classList.add('lit'); setTimeout(()=>{ dot.classList.remove('lit'); dot.classList.add(ok?'ok':'err'); }, 400); }
+
+  if (ok) { G.score += G.hintsLeft===3 ? 10 : G.hintsLeft===2 ? 7 : 4; G.correct++; }
+  else G.wrong++;
+  document.getElementById('scoreEl').textContent = G.score;
+
+  const fb = document.getElementById('feedback');
+  const fbI = document.getElementById('fbIcon');
+  const fbB = document.getElementById('fbBody');
+  const famTag = q.family ? `<span class="fam-tag">${q.family}</span>` : '';
+  if (ok) {
+    fb.className = 'feedback fb-ok';
+    fbI.innerHTML = '<i data-lucide="check-circle" width="18" height="18"></i>';
+    fbB.innerHTML = `<strong>Correct!</strong><span class="eco-tag">${q.eco}</span>${famTag}${q.desc||''}`;
+  } else {
+    fb.className = 'feedback fb-err';
+    fbI.innerHTML = '<i data-lucide="x-circle" width="18" height="18"></i>';
+    fbB.innerHTML = `<strong>Incorrect.</strong> This is <em>${correct}</em> <span class="eco-tag">${q.eco}</span>${famTag}${q.desc||''}`;
+  }
+  lucide.createIcons();
+  setTimeout(()=>fb.classList.add('vis'), 50);
+  document.getElementById('nextBtn').classList.add('vis');
+}
+
+function useHint() {
+  if (!G.hintsLeft || G.answered) return;
+  const q = G.questions[G.cur];
+  G.hintsLeft--; G.hintsUsed++;
+  document.getElementById('hintsLeft').textContent = G.hintsLeft;
+  if (!G.hintsLeft) document.getElementById('hintBtn').disabled = true;
+  const box = document.getElementById('hintBox');
+  box.textContent = '💡 ' + q.hint;
+  box.classList.add('vis');
+}
+
+function nextQ() {
+  G.cur++;
+  if (G.cur >= G.questions.length) { showResult(); return; }
+  loadQ();
+}
+
+function showResult() {
+  document.getElementById('quizWrap').classList.remove('vis');
+  const rs = document.getElementById('result');
+  rs.classList.add('vis');
+  const pct = G.correct / G.questions.length;
+  let trophy, title, msg;
+  if (pct===1) { trophy='🏆'; title='Opening Grandmaster!'; msg='Perfect! You know your openings and variations inside out.'; }
+  else if (pct>=.8) { trophy='🥇'; title='Outstanding!'; msg='Excellent opening knowledge!'; }
+  else if (pct>=.6) { trophy='🥈'; title='Well played!'; msg='Good result! Keep studying opening theory on ChessLessonsPro.'; }
+  else if (pct>=.4) { trophy='📚'; title='Room to improve!'; msg='Openings and variations are tricky — keep at it!'; }
+  else { trophy='♟️'; title='Keep practicing!'; msg='Openings are the foundation — come back and try again!'; }
+  document.getElementById('rTrophy').textContent = trophy;
+  document.getElementById('rTitle').textContent = title;
+  document.getElementById('rScore').textContent = `${G.correct} / ${G.questions.length}`;
+  document.getElementById('rMsg').textContent = msg;
+  document.getElementById('stC').textContent = G.correct;
+  document.getElementById('stW').textContent = G.wrong;
+  document.getElementById('stH').textContent = G.hintsUsed;
+}
+
+function restart() {
+  document.getElementById('result').classList.remove('vis');
+  document.getElementById('startScreen').classList.remove('hidden');
+}
+
+lucide.createIcons();
+updatePool();
+</script>
+</body>
+</html>
